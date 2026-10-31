@@ -2,7 +2,7 @@
 const CLOUD_SAVE_PASSWORD = 'sdrgb';
 
 // Replace with your actual deployed Google Apps Script Web App URL ending in /exec:
-const HARDCODED_CLOUD_URL = 'https://script.google.com/macros/s/AKfycb...YOUR_DEPLOYMENT_ID.../exec';
+   const HARDCODED_CLOUD_URL = 'https://script.google.com/macros/s/AKfycbxmPIx8jBMvjX0gtzpmbKfOWpYHixRpTiP87XU2M_hcySrn19e6FphErbzWCGHQL8z__g/exec';
 
 const STAGE_CONFIG = {
   1: { label: 'Day 1 Review', short: 'Day 1', class: 'badge-d1' },
@@ -12,10 +12,10 @@ const STAGE_CONFIG = {
   5: { label: 'Mastered', short: 'Mastered', class: 'badge-master' }
 };
 
-// 1-3-7-30 Interval increments:
-// Day 1 Review passed -> Day 3 (+2 days)
-// Day 3 Review passed -> Day 7 (+4 days)
-// Day 7 Review passed -> Day 30 (+23 days)
+// Spaced Repetition forward intervals:
+// Day 1 Review passed -> Day 3 (+2 days from Day 1)
+// Day 3 Review passed -> Day 7 (+4 days from Day 3)
+// Day 7 Review passed -> Day 30 (+23 days from Day 7)
 const FORWARD_INTERVALS = {
   1: 2,
   2: 4,
@@ -35,6 +35,60 @@ let activeDemotingTopicId = null;
 let activeEditingTopicId = null;
 let selectedDemoteStage = 1;
 let hasUnsavedCloudChanges = false;
+let isSyncInProgress = false;
+
+// --- CLOUD ENDPOINT DIAGNOSTIC VALIDATOR ---
+function getCloudEndpointStatus() {
+  if (!HARDCODED_CLOUD_URL || HARDCODED_CLOUD_URL.trim() === '') {
+    return {
+      ok: false,
+      category: 'APP CONFIG ERROR',
+      message: 'Cloud Sheet URL is completely empty. Paste your Web App /exec URL into HARDCODED_CLOUD_URL in app.js.'
+    };
+  }
+
+  if (HARDCODED_CLOUD_URL.includes('YOUR_DEPLOYMENT_ID') || HARDCODED_CLOUD_URL.includes('AKfycb...')) {
+    return {
+      ok: false,
+      category: 'APP CONFIG ERROR',
+      message: 'Cloud URL still contains placeholder text ("YOUR_DEPLOYMENT_ID"). Replace it with your actual deployment ID.'
+    };
+  }
+
+  if (!HARDCODED_CLOUD_URL.startsWith('https://script.google.com/macros/s/')) {
+    return {
+      ok: false,
+      category: 'APP CONFIG ERROR',
+      message: 'Invalid URL scheme. Google Apps Script URLs must start with "https://script.google.com/macros/s/".'
+    };
+  }
+
+  if (!HARDCODED_CLOUD_URL.endsWith('/exec')) {
+    return {
+      ok: false,
+      category: 'APP CONFIG ERROR',
+      message: 'URL must end with "/exec". If it ends in "/dev" or "/edit", redeploy as a Web App.'
+    };
+  }
+
+  return { ok: true };
+}
+
+// --- DYNAMIC VISUAL VIEWPORT & KEYBOARD TRACKER ---
+function setupVisualViewportSync() {
+  if (!window.visualViewport) return;
+
+  const updateViewport = () => {
+    const vv = window.visualViewport;
+    const keyboardHeight = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    document.documentElement.style.setProperty('--keyboard-height', `${keyboardHeight}px`);
+    document.documentElement.style.setProperty('--visual-viewport-h', `${vv.height}px`);
+  };
+
+  window.visualViewport.addEventListener('resize', updateViewport);
+  window.visualViewport.addEventListener('scroll', updateViewport);
+  updateViewport();
+}
 
 window.addEventListener('DOMContentLoaded', async () => {
   setupVisualViewportSync();
@@ -47,7 +101,8 @@ window.addEventListener('DOMContentLoaded', async () => {
   loadData();
   renderAll();
 
-  if (topics.length === 0 && HARDCODED_CLOUD_URL && HARDCODED_CLOUD_URL.includes('/exec')) {
+  // If local storage is empty, auto-pull data directly from Google Sheet on startup
+  if (topics.length === 0) {
     autoSyncFromCloud();
   }
 
@@ -63,25 +118,6 @@ window.addEventListener('beforeunload', (e) => {
     return '';
   }
 });
-
-
-
-// --- DYNAMIC VISUAL VIEWPORT & KEYBOARD TRACKER ---
-function setupVisualViewportSync() {
-  if (!window.visualViewport) return;
-
-  const updateViewport = () => {
-    const vv = window.visualViewport;
-    // Calculates exact height consumed by virtual keyboard + suggestion / password bars
-    const keyboardHeight = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-    document.documentElement.style.setProperty('--keyboard-height', `${keyboardHeight}px`);
-    document.documentElement.style.setProperty('--visual-viewport-h', `${vv.height}px`);
-  };
-
-  window.visualViewport.addEventListener('resize', updateViewport);
-  window.visualViewport.addEventListener('scroll', updateViewport);
-  updateViewport();
-}
 
 function getTodayString() {
   const d = new Date();
@@ -111,6 +147,7 @@ function normalizePaper(paperStr) {
   return 'Other';
 }
 
+// Collide-safe card generator: parses highest integer suffix across dataset
 function generateNextCardId(paper) {
   const norm = normalizePaper(paper);
   const regex = new RegExp(`^${norm}-(\\d+)$`, 'i');
@@ -136,7 +173,7 @@ function loadData() {
     const today = getTodayString();
     let hasChanges = false;
 
-    topics.forEach((t, index) => {
+    topics.forEach((t) => {
       if (!t.stage) t.stage = 1;
       if (!t.addedDate) t.addedDate = today;
       if (!t.lastReviewed) t.lastReviewed = t.addedDate;
@@ -184,6 +221,19 @@ function updateSyncStatusUI() {
   const saveBtn = document.getElementById('header-save-btn');
   const discardBtn = document.getElementById('header-discard-btn');
 
+  if (isSyncInProgress) {
+    if (dot) dot.className = 'dot syncing';
+    if (text) text.textContent = 'Syncing...';
+    if (saveBtn) {
+      saveBtn.className = 'btn-header-save unsaved';
+      saveBtn.textContent = '⏳ Saving...';
+      saveBtn.disabled = true;
+    }
+    return;
+  }
+
+  if (saveBtn) saveBtn.disabled = false;
+
   if (hasUnsavedCloudChanges) {
     if (dot) dot.className = 'dot unsaved';
     if (text) text.textContent = 'Unsaved Changes';
@@ -203,17 +253,57 @@ function updateSyncStatusUI() {
   }
 }
 
-// Auto-syncs from cloud if local storage was cleared
+// --- TOAST NOTIFICATIONS ---
+function showToast(message, isError = false, showRetry = false) {
+  const toast = document.getElementById('toast-container');
+  const msgEl = document.getElementById('toast-message');
+  const retryBtn = document.getElementById('toast-retry-btn');
+
+  if (!toast || !msgEl) return;
+
+  msgEl.textContent = message;
+  toast.className = isError ? 'toast-container error' : 'toast-container';
+  
+  if (retryBtn) {
+    if (showRetry) retryBtn.classList.remove('hidden');
+    else retryBtn.classList.add('hidden');
+  }
+
+  toast.classList.remove('hidden');
+
+  if (!isError) {
+    setTimeout(hideToast, 4000);
+  }
+}
+
+function hideToast() {
+  document.getElementById('toast-container')?.classList.add('hidden');
+}
+
+// Auto-syncs from cloud on startup when local storage is empty
 async function autoSyncFromCloud() {
+  const endpointCheck = getCloudEndpointStatus();
+  if (!endpointCheck.ok) {
+    if (HARDCODED_CLOUD_URL && HARDCODED_CLOUD_URL.trim() !== '') {
+      showToast(`[Startup Sync] ${endpointCheck.message}`, true, false);
+    }
+    return;
+  }
+
   const statusText = document.getElementById('sync-status-text');
   const dot = document.getElementById('sync-dot');
   
   if (statusText) statusText.textContent = 'Syncing from Sheet...';
-  if (dot) dot.className = 'dot unsaved';
+  if (dot) dot.className = 'dot syncing';
 
   try {
     const fetchUrl = `${HARDCODED_CLOUD_URL}?password=${encodeURIComponent(CLOUD_SAVE_PASSWORD)}`;
     const res = await fetch(fetchUrl);
+    
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+
     const data = await res.json();
 
     if (Array.isArray(data) && data.length > 0) {
@@ -241,51 +331,56 @@ async function autoSyncFromCloud() {
 
       updateSyncStatusUI();
       renderAll();
+      showToast(`✓ Auto-synced ${topics.length} cards from Google Sheet`);
     } else {
       updateSyncStatusUI();
     }
   } catch (err) {
     console.warn('Auto-sync failed:', err);
     updateSyncStatusUI();
+    if (navigator.onLine) {
+      showToast('[Auto-Sync Failed] Unable to read from Sheet. Check your URL deployment.', true, false);
+    }
   }
 }
 
+// Manual pull trigger from settings tab
 async function pullFromCloud() {
-  const enteredPass = prompt('Enter password to pull from Google Sheet:', '');
-  if (enteredPass === null) return;
-  
-  if (enteredPass.trim() !== CLOUD_SAVE_PASSWORD) {
-    alert('Incorrect password. Pull aborted.');
-    return;
-  }
-
-  if (!HARDCODED_CLOUD_URL || !HARDCODED_CLOUD_URL.includes('/exec')) {
-    alert('Please insert a valid Google Apps Script Web App URL ending in /exec into app.js.');
+  const endpointCheck = getCloudEndpointStatus();
+  if (!endpointCheck.ok) {
+    showToast(`[${endpointCheck.category}] ${endpointCheck.message}`, true, false);
     return;
   }
 
   const btn = document.getElementById('btn-pull-cloud');
-  const origText = btn.textContent;
-  btn.textContent = '⏳ Fetching from Sheet...';
-  btn.disabled = true;
+  const origText = btn ? btn.textContent : '';
+  if (btn) {
+    btn.textContent = '⏳ Fetching from Sheet...';
+    btn.disabled = true;
+  }
 
   try {
-    const fetchUrl = `${HARDCODED_CLOUD_URL}?password=${encodeURIComponent(enteredPass.trim())}`;
+    const fetchUrl = `${HARDCODED_CLOUD_URL}?password=${encodeURIComponent(CLOUD_SAVE_PASSWORD)}`;
     const response = await fetch(fetchUrl);
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} (${response.statusText || 'Server Error'})`);
+    }
+
     const data = await response.json();
 
     if (data && data.error === 'UNAUTHORIZED') {
-      alert('Unauthorized access.');
+      showToast('Unauthorized access. Verify CLOUD_SAVE_PASSWORD in app.js matches AUTH_KEY in Code.gs.', true, false);
       return;
     }
 
     if (!Array.isArray(data)) {
-      alert('Invalid data structure received from Google Sheet.');
+      showToast('Invalid data structure received from Google Sheet.', true, false);
       return;
     }
 
     if (data.length === 0) {
-      alert('The Google Sheet currently contains no topics.');
+      showToast('The Google Sheet currently contains no topics.', false, false);
       return;
     }
 
@@ -317,14 +412,16 @@ async function pullFromCloud() {
     updateSyncStatusUI();
     renderAll();
     switchTab('today');
-    alert(`✓ Successfully restored ${topics.length} topics from Google Sheet into your app!`);
+    showToast(`✓ Restored ${topics.length} topics from Sheet`);
 
   } catch (err) {
     console.error('Pull failed:', err);
-    alert('Failed to connect to Google Sheet. Check internet connection.');
+    showToast(`[PULL FAILED] ${err.message || err.toString()}`, true, false);
   } finally {
-    btn.textContent = origText;
-    btn.disabled = false;
+    if (btn) {
+      btn.textContent = origText;
+      btn.disabled = false;
+    }
   }
 }
 
@@ -346,7 +443,7 @@ function discardLocalChanges() {
   localStorage.removeItem(UNSAVED_FLAG_KEY);
   updateSyncStatusUI();
   renderAll();
-  alert('Local changes discarded. Reverted to last saved snapshot.');
+  showToast('Reverted to last saved snapshot');
 }
 
 function openPasswordModal() {
@@ -359,7 +456,7 @@ function openPasswordModal() {
 
   document.body.style.overflow = 'hidden';
   modal.classList.add('open');
-  setTimeout(() => passInput?.focus(), 100);
+  setTimeout(() => passInput?.focus(), 120);
 }
 
 function closePasswordModal() {
@@ -368,67 +465,132 @@ function closePasswordModal() {
   document.body.style.overflow = '';
 }
 
-async function verifyAndSaveToCloud() {
+// --- NON-BLOCKING OPTIMISTIC SAVE WITH VERIFIED ACKNOWLEDGEMENT & DIAGNOSTICS ---
+async function verifyAndSaveToCloud(isRetry = false) {
+  if (isSyncInProgress) {
+    showToast('A sync is already running in background...');
+    return;
+  }
+
+  // STEP 1: Verify user password
+  let enteredPass = '';
   const passInput = document.getElementById('save-password-input');
-  const errorEl = document.getElementById('password-error-msg');
-  const enteredPass = passInput.value.trim();
 
-  if (enteredPass !== CLOUD_SAVE_PASSWORD) {
-    errorEl.textContent = 'Incorrect password. Changes not saved.';
-    errorEl.classList.remove('hidden');
-    passInput.focus();
-    return;
+  if (!isRetry) {
+    enteredPass = passInput?.value.trim() || '';
+    if (enteredPass !== CLOUD_SAVE_PASSWORD) {
+      const errorEl = document.getElementById('password-error-msg');
+      if (errorEl) {
+        errorEl.textContent = 'USER AUTH ERROR: Incorrect password. Sheet was not modified.';
+        errorEl.classList.remove('hidden');
+      }
+      passInput?.focus();
+      return;
+    }
+  } else {
+    enteredPass = CLOUD_SAVE_PASSWORD;
   }
 
-  if (!HARDCODED_CLOUD_URL || !HARDCODED_CLOUD_URL.includes('/exec')) {
-    alert('Please insert your valid Google Apps Script Web App URL ending in /exec into app.js.');
+  // STEP 2: Pre-flight App Configuration Check
+  const endpointCheck = getCloudEndpointStatus();
+  if (!endpointCheck.ok) {
     closePasswordModal();
+    showToast(`[${endpointCheck.category}] ${endpointCheck.message}`, true, false);
     return;
   }
 
+  // STEP 3: Client Data Guard
   if (!topics || topics.length === 0) {
-    alert('Safety Block: Local topic list is empty. Overwrite blocked.');
     closePasswordModal();
+    showToast('[APP SAFEGUARD] Local topic list is empty. Cloud overwrite blocked to prevent data loss.', true, false);
     return;
   }
 
-  // Optimistic UI close
+  // Unblock UI immediately
   closePasswordModal();
-  hasUnsavedCloudChanges = false;
-  localStorage.removeItem(UNSAVED_FLAG_KEY);
-  localStorage.setItem(SYNCED_SNAPSHOT_KEY, JSON.stringify(topics));
+  isSyncInProgress = true;
+  hideToast();
   updateSyncStatusUI();
 
-  const syncDot = document.getElementById('sync-dot');
-  const syncText = document.getElementById('sync-status-text');
-  if (syncDot) syncDot.className = 'dot unsaved';
-  if (syncText) syncText.textContent = 'Pushing to Sheet...';
-
-  const payload = {
+  const payloadSnapshot = JSON.stringify({
     password: enteredPass,
     data: topics
-  };
+  });
 
   try {
-    await fetch(HARDCODED_CLOUD_URL, {
+    const response = await fetch(HARDCODED_CLOUD_URL, {
       method: 'POST',
-      mode: 'no-cors',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(payload)
+      body: payloadSnapshot
     });
 
-    if (syncDot) syncDot.className = 'dot';
-    if (syncText) syncText.textContent = 'Synced to Sheet';
+    if (!response.ok) {
+      throw {
+        category: 'GOOGLE SERVER ERROR',
+        message: `HTTP ${response.status} (${response.statusText || 'Endpoint returned error'}). Verify your Script deployment is active.`
+      };
+    }
+
+    const responseText = await response.text();
+    let result;
+
+    try {
+      result = JSON.parse(responseText);
+    } catch (parseErr) {
+      if (responseText.includes('accounts.google.com') || responseText.includes('ServiceLogin')) {
+        throw {
+          category: 'PERMISSIONS ERROR',
+          message: 'Google blocked the request with a login screen. Under "Deploy > Manage Deployments", set "Who has access" to "Anyone".'
+        };
+      }
+      throw {
+        category: 'ENDPOINT ERROR',
+        message: `Google Script returned invalid response: "${responseText.slice(0, 60)}". Check if URL points to the right script.`
+      };
+    }
+
+    // Backend logical validation
+    if (!result.success) {
+      throw {
+        category: 'SHEET PROCESSING ERROR',
+        message: result.error || 'Apps Script rejected payload.'
+      };
+    }
+
+    // SUCCESS CONFIRMED BY GOOGLE SHEET
+    localStorage.setItem(SYNCED_SNAPSHOT_KEY, JSON.stringify(topics));
+    hasUnsavedCloudChanges = false;
+    localStorage.removeItem(UNSAVED_FLAG_KEY);
+    showToast(`✓ Sheet updated successfully (${result.count} cards committed)`);
+
   } catch (err) {
-    console.error('Background cloud sync error:', err);
+    console.error('Save failed:', err);
+
     hasUnsavedCloudChanges = true;
     localStorage.setItem(UNSAVED_FLAG_KEY, 'true');
+
+    let category = err.category || 'NETWORK ERROR';
+    let message = err.message || err.toString();
+
+    // Catch generic TypeError: Failed to fetch
+    if (message.includes('Failed to fetch') || message.includes('NetworkError')) {
+      if (!navigator.onLine) {
+        category = 'DEVICE OFFLINE';
+        message = 'No active internet connection. Your changes remain saved locally.';
+      } else {
+        category = 'URL / ENDPOINT ERROR';
+        message = 'Could not reach Apps Script. Check if the URL deployment ID is valid and accessible.';
+      }
+    }
+
+    showToast(`[${category}] ${message}`, true, true);
+  } finally {
+    isSyncInProgress = false;
     updateSyncStatusUI();
-    alert('Background push failed. Changes remain safe in local storage.');
   }
 }
 
-// --- LOG TOPIC (DAY 0 COMPLETE, DAY 1 DUE TOMORROW) ---
+// --- ADD TOPIC: DAY 0 DONE TODAY, DAY 1 DUE TOMORROW ---
 function addNewTopic() {
   const title = document.getElementById('add-topic-title').value.trim();
   const paper = document.getElementById('add-topic-paper').value;
@@ -448,7 +610,7 @@ function addNewTopic() {
     title: title,
     paper: paper,
     stage: 1, // Ready for Day 1 revision
-    addedDate: today, // Day 0 done today
+    addedDate: today, // Day 0 studied today
     lastReviewed: today,
     nextDue: addDays(today, 1), // Day 1 revision is due TOMORROW
     failCount: 0
@@ -460,9 +622,10 @@ function addNewTopic() {
   document.getElementById('add-topic-title').value = '';
   document.getElementById('add-card-id').value = '';
   closeAddModal();
+  showToast(`Added [${cardId}] • Day 1 due tomorrow`);
 }
 
-// --- ADVANCE MILESTONE ---
+// --- PASS: ADVANCE THROUGH 1 -> 3 -> 7 -> 30 CYCLE ---
 function handlePass(id) {
   const topic = topics.find(t => t.id === id);
   if (!topic) return;
@@ -501,6 +664,7 @@ function shiftPendingPlusOneDay() {
   });
 
   saveData();
+  showToast(`Postponed ${pending.length} topics by +1 day`);
 }
 
 function openDemoteModal(id) {
@@ -516,6 +680,7 @@ function openDemoteModal(id) {
     selectDemoteStage(1);
   }
 
+  document.body.style.overflow = 'hidden';
   document.getElementById('demote-modal').classList.add('open');
 }
 
@@ -584,6 +749,7 @@ function openEditModal(id) {
     dueInput.value = topic.nextDue || addDays(getTodayString(), 1);
   }
 
+  document.body.style.overflow = 'hidden';
   document.getElementById('edit-modal').classList.add('open');
 }
 
@@ -683,11 +849,33 @@ function openTomorrowModal() {
     `).join('');
   }
 
+  document.body.style.overflow = 'hidden';
   document.getElementById('tomorrow-modal').classList.add('open');
 }
 
 function closeTomorrowModal() {
+  document.activeElement?.blur();
   document.getElementById('tomorrow-modal').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function openAddModal() {
+  document.body.style.overflow = 'hidden';
+  document.getElementById('add-modal').classList.add('open');
+}
+
+function closeAddModal() {
+  document.activeElement?.blur();
+  document.getElementById('add-modal').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function closeModalOnBg(e, modalId) {
+  if (e.target.id === modalId) {
+    document.activeElement?.blur();
+    document.getElementById(modalId).classList.remove('open');
+    document.body.style.overflow = '';
+  }
 }
 
 function renderAll() {
@@ -851,24 +1039,6 @@ function switchTab(tab) {
   }
 }
 
-function openAddModal() {
-  document.body.style.overflow = 'hidden';
-  document.getElementById('add-modal').classList.add('open');
-}
-
-function closeAddModal() {
-  document.activeElement?.blur();
-  document.getElementById('add-modal').classList.remove('open');
-  document.body.style.overflow = '';
-}
-
-function closeModalOnBg(e, modalId) {
-  if (e.target.id === modalId) {
-    document.activeElement?.blur();
-    document.getElementById(modalId).classList.remove('open');
-    document.body.style.overflow = '';
-  }
-}
 function escapeHtml(str) {
   return (str || '').replace(/[&<>'"]/g, tag => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
@@ -898,7 +1068,7 @@ function importDataJSON(event) {
         const existingIds = new Set(topics.map(t => t.id));
         let addedCount = 0;
 
-        parsed.forEach((item, idx) => {
+        parsed.forEach((item) => {
           const id = item.id || ('T-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5));
           if (!existingIds.has(id)) {
             const stage = item.stage !== undefined ? item.stage : 1;
@@ -919,7 +1089,7 @@ function importDataJSON(event) {
         });
 
         saveData();
-        alert(`Successfully imported ${addedCount} topics.`);
+        showToast(`Imported ${addedCount} topics`);
       }
     } catch (err) {
       alert('Invalid JSON file format.');

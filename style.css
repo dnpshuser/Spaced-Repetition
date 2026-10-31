@@ -26,7 +26,13 @@ body {
   background-color: var(--bg);
   color: var(--text-main);
   min-height: 100vh;
-  padding-bottom: 80px;
+  padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+}
+
+button, .filter-chip, .tab-btn, .forecast-chip {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
 }
 
 header {
@@ -38,7 +44,7 @@ header {
   align-items: center;
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: 20;
 }
 header h1 {
   font-size: 1.1rem;
@@ -58,11 +64,21 @@ header .dot {
   height: 8px;
   background: var(--success);
   border-radius: 50%;
-  transition: background 0.3s;
+  transition: all 0.3s;
 }
 header .dot.unsaved {
   background: var(--warning);
   box-shadow: 0 0 8px rgba(245, 158, 11, 0.6);
+}
+header .dot.syncing {
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.7);
+  animation: pulseDot 0.9s infinite alternate;
+}
+
+@keyframes pulseDot {
+  from { opacity: 0.4; transform: scale(0.8); }
+  to { opacity: 1; transform: scale(1.25); }
 }
 
 .header-actions {
@@ -385,14 +401,28 @@ header .dot.unsaved {
 .btn-text-danger { background: transparent; border: none; color: var(--danger); font-size: 0.82rem; font-weight: 600; cursor: pointer; }
 .btn-text-close { background: transparent; border: none; color: var(--text-muted); font-size: 1.1rem; cursor: pointer; padding: 4px 8px; }
 .btn-text-close:hover { color: var(--text-main); }
-.btn-add { background: var(--accent); color: #fff; width: 100%; padding: 14px; font-size: 0.95rem; margin-top: 10px; }
 
+/* MAIN SCREEN ADD BUTTON */
+#view-today > .btn-add {
+  background: var(--accent);
+  color: #ffffff;
+  width: 100%;
+  padding: 14px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin-top: 14px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.35);
+}
+
+/* --- MOBILE BOTTOM SHEET & KEYBOARD DOCKING FIX --- */
 .modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
-  /* Sticks bottom sheet directly above virtual keyboard / password bar */
   bottom: var(--keyboard-height, 0px);
   background: rgba(0, 0, 0, 0.75);
   display: none;
@@ -402,7 +432,11 @@ header .dot.unsaved {
   overflow: hidden;
   transition: bottom 0.12s ease-out;
 }
-.modal-overlay.open { display: flex; }
+
+.modal-overlay.open {
+  display: flex;
+}
+
 .modal {
   background: var(--surface);
   border-top: 1px solid var(--surface-border);
@@ -411,18 +445,19 @@ header .dot.unsaved {
   max-width: 600px;
   padding: 18px 20px 12px 20px;
   animation: slideUp 0.2s ease-out;
-  /* Constrains modal within visible space above keyboard */
   max-height: calc(var(--visual-viewport-h, 100dvh) - 16px);
   display: flex;
   flex-direction: column;
   overflow-y: auto;
   box-sizing: border-box;
 }
+
 @keyframes slideUp {
   from { transform: translateY(100%); }
   to { transform: translateY(0); }
 }
 
+/* STICKY CONTAINER FOR MULTI-BUTTON MODALS */
 .modal .actions {
   position: sticky;
   bottom: 0;
@@ -435,6 +470,7 @@ header .dot.unsaved {
   box-shadow: 0 -8px 16px -4px rgba(24, 32, 44, 0.95);
 }
 
+/* SOLID STICKY COMMIT BUTTON IN ADD MODAL */
 .modal > .btn-add {
   position: sticky;
   bottom: 0;
@@ -454,32 +490,13 @@ header .dot.unsaved {
   align-items: center;
   box-shadow: 0 4px 14px rgba(59, 130, 246, 0.45);
   z-index: 10;
-  transition: background 0.15s ease, opacity 0.15s ease;
 }
-
 .modal > .btn-add:active {
   background: var(--accent-hover) !important;
   opacity: 0.9;
 }
 
-#view-today > .btn-add {
-  background: var(--accent);
-  color: #ffffff;
-  width: 100%;
-  padding: 14px;
-  font-size: 0.95rem;
-  font-weight: 700;
-  margin-top: 14px;
-  border-radius: 8px;
-  border: none;
-  cursor: pointer;
-  box-shadow: 0 2px 10px rgba(59, 130, 246, 0.3);
-}
-
-.form-group {
-  margin-bottom: 14px;
-}
-
+.form-group { margin-bottom: 14px; }
 .form-group label {
   display: block;
   font-size: 0.78rem;
@@ -496,42 +513,9 @@ header .dot.unsaved {
   color: var(--text-main);
   padding: 12px;
   border-radius: 8px;
-  font-size: 16px !important; /* 16px prevents mobile browser auto-zoom */
+  font-size: 16px !important; /* Prevents auto-zoom on mobile safari/chrome */
 }
-.form-control:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-
-@media (max-height: 520px) {
-  .modal {
-    padding: 12px 16px 8px 16px;
-  }
-  .modal h3 {
-    font-size: 0.95rem;
-    margin-bottom: 4px !important;
-  }
-  /* Hides long descriptions when keyboard is open so fields fit cleanly */
-  .modal p:not(#demote-topic-title) {
-    display: none;
-  }
-  .form-group {
-    margin-bottom: 8px;
-  }
-  .form-group label {
-    font-size: 0.68rem;
-    margin-bottom: 2px;
-  }
-  .form-control {
-    padding: 8px 10px;
-  }
-  .modal .actions,
-  .modal > .btn-add {
-    padding-top: 6px;
-    padding-bottom: 8px;
-    margin-top: 6px;
-  }
-}
+.form-control:focus { outline: none; border-color: var(--accent); }
 
 .error-banner {
   background: rgba(239, 68, 68, 0.15);
@@ -613,6 +597,70 @@ header .dot.unsaved {
   margin-top: 2px;
 }
 
+/* COMPACT MODE WHEN KEYBOARD OCCUPIES SCREEN */
+@media (max-height: 520px) {
+  .modal { padding: 12px 16px 8px 16px; }
+  .modal h3 { font-size: 0.95rem; margin-bottom: 4px !important; }
+  .modal p:not(#demote-topic-title) { display: none; }
+  .form-group { margin-bottom: 8px; }
+  .form-group label { font-size: 0.68rem; margin-bottom: 2px; }
+  .form-control { padding: 8px 10px; }
+  .modal .actions { padding-top: 6px; padding-bottom: 8px; }
+  .modal > .btn-add { margin-top: 8px; padding: 10px; }
+}
+
+/* --- NON-BLOCKING FLOATING TOAST BANNER --- */
+.toast-container {
+  position: fixed;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  left: 16px;
+  right: 16px;
+  max-width: 568px;
+  margin: 0 auto;
+  background: #1e293b;
+  border: 1px solid var(--surface-border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  z-index: 200;
+  animation: slideUp 0.2s ease-out;
+}
+.toast-container.error {
+  border-color: var(--danger);
+  background: #2a1518;
+}
+.toast-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.85rem;
+  color: var(--text-main);
+  flex: 1;
+}
+.toast-btn {
+  background: var(--danger);
+  color: #fff;
+  border: none;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.toast-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0 4px;
+  margin-left: 8px;
+}
+
 .empty-state {
   text-align: center;
   padding: 48px 16px;
@@ -624,25 +672,4 @@ header .dot.unsaved {
   font-size: 1.1rem;
 }
 
-.hidden { display: none; }
-
-/* 1. Prevent iOS Safari auto-zoom on field focus */
-.form-control {
-  font-size: 16px !important;
-}
-
-/* 2. Remove tap highlight box and 300ms tap delay on mobile */
-button, .filter-chip, .tab-btn, .forecast-chip {
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-  user-select: none;
-}
-
-/* 3. Handle notched screens and iOS home-indicator bar */
-body {
-  padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
-}
-
-.modal {
-  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
-}
+.hidden { display: none !important; }

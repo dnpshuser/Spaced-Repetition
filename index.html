@@ -4,12 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
   <meta name="theme-color" content="#121820" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="manifest" href="./manifest.json" />
-  <link rel="icon" type="image/svg+xml" href="./icon.svg" />
-  <link rel="apple-touch-icon" href="./icon.png" />
   <link rel="stylesheet" href="./style.css" />
   <title>Mains Revision Engine</title>
 </head>
@@ -36,12 +31,13 @@
   <nav class="nav-tabs">
     <button class="tab-btn active" onclick="switchTab('today')">Today's Queue (<span id="due-count">0</span>)</button>
     <button class="tab-btn" onclick="switchTab('pipeline')">Full Pipeline (<span id="total-count">0</span>)</button>
-    <button class="tab-btn" onclick="switchTab('settings')">Backup & Restore</button>
+    <button class="tab-btn" onclick="switchTab('settings')">Offline Backups</button>
   </nav>
 
   <main class="container">
     <!-- TAB 1: TODAY'S QUEUE -->
     <section id="view-today">
+      <!-- Milestone Stages Summary -->
       <div class="summary-grid">
         <div class="stat-card"><div class="count d1" id="stat-d1">0</div><div class="label">Day 1</div></div>
         <div class="stat-card"><div class="count d3" id="stat-d3">0</div><div class="label">Day 3</div></div>
@@ -112,7 +108,7 @@
         <button class="btn-text-close" onclick="closePasswordModal()">✕</button>
       </div>
       <p style="font-size: 0.84rem; color: var(--text-muted); margin-bottom: 16px; line-height: 1.4;">
-        Enter your authorization password to write all pending local changes to your connected Google Sheet.
+        Enter your authorization password to push pending local changes to your Google Sheet in the background.
       </p>
 
       <div class="form-group">
@@ -122,7 +118,7 @@
 
       <div id="password-error-msg" class="error-banner hidden">Incorrect password. Changes not saved.</div>
 
-      <div class="actions" style="margin-top: 18px;">
+      <div class="actions">
         <button class="btn btn-secondary" onclick="closePasswordModal()">Cancel</button>
         <button class="btn btn-pass" onclick="verifyAndSaveToCloud()">Verify & Save</button>
       </div>
@@ -138,7 +134,7 @@
       </div>
       <p id="tomorrow-modal-subtitle" style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 14px;"></p>
       <div id="tomorrow-list" class="forecast-list-container"></div>
-      <div style="margin-top: 16px;">
+      <div class="actions" style="margin-top: 14px;">
         <button class="btn btn-secondary" style="width:100%;" onclick="closeTomorrowModal()">Close</button>
       </div>
     </div>
@@ -147,10 +143,13 @@
   <!-- ADD TOPIC MODAL -->
   <div class="modal-overlay" id="add-modal" onclick="closeModalOnBg(event, 'add-modal')">
     <div class="modal">
-      <h3 style="margin-bottom: 14px;">Log New Topic (Day 0)</h3>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
+        <h3>Log New Topic (Day 0)</h3>
+        <button class="btn-text-close" onclick="closeAddModal()">✕</button>
+      </div>
       <div class="form-group">
         <label>PHYSICAL CARD ID (Optional)</label>
-        <input type="text" id="add-card-id" class="form-control" placeholder="e.g. GS2-042 or 0145" />
+        <input type="text" id="add-card-id" class="form-control" placeholder="Auto-generated if left blank" />
       </div>
       <div class="form-group">
         <label>TOPIC TITLE</label>
@@ -215,7 +214,7 @@
         <input type="date" id="edit-topic-due" class="form-control" />
       </div>
 
-      <div class="actions" style="margin-top: 18px;">
+      <div class="actions">
         <button class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
         <button class="btn btn-pass" onclick="saveTopicEdits()">Save Changes</button>
       </div>
@@ -225,7 +224,10 @@
   <!-- DEMOTION TARGET MODAL -->
   <div class="modal-overlay" id="demote-modal" onclick="closeModalOnBg(event, 'demote-modal')">
     <div class="modal">
-      <h3 style="margin-bottom: 4px;">Demote Topic</h3>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 4px;">
+        <h3>Demote Topic</h3>
+        <button class="btn-text-close" onclick="closeDemoteModal()">✕</button>
+      </div>
       <p id="demote-topic-title" style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 16px;"></p>
 
       <div class="form-group">
@@ -246,13 +248,22 @@
         Next Revision Due: <span id="demote-preview-date" style="font-weight: 700; color: var(--accent);"></span>
       </div>
 
-      <div class="actions" style="margin-top: 16px;">
+      <div class="actions" style="margin-top: 14px;">
         <button class="btn btn-secondary" onclick="closeDemoteModal()">Cancel</button>
         <button class="btn btn-fail" onclick="confirmDemotion()">Confirm Demotion</button>
       </div>
     </div>
   </div>
 
-  <script src="app.js"></script>
+  <!-- NON-BLOCKING FLOATING TOAST BANNER -->
+  <div id="toast-container" class="toast-container hidden">
+    <div class="toast-content">
+      <span id="toast-message"></span>
+      <button id="toast-retry-btn" class="toast-btn hidden" onclick="verifyAndSaveToCloud(true)">Retry</button>
+    </div>
+    <button class="toast-close" onclick="hideToast()">✕</button>
+  </div>
+
+  <script src="./app.js"></script>
 </body>
 </html>
