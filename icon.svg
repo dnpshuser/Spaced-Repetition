@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#18202c" />
+      <stop offset="100%" stop-color="#0f141c" />
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#60a5fa" />
+      <stop offset="100%" stop-color="#2563eb" />
+    </linearGradient>
+    <linearGradient id="greenGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34d399" />
+      <stop offset="100%" stop-color="#059669" />
+    </linearGradient>
+  </defs>
+
+  <!-- Squircle Base -->
+  <rect width="512" height="512" rx="115" fill="url(#bgGrad)" />
+  <rect x="12" y="12" width="488" height="488" rx="103" fill="none" stroke="#243042" stroke-width="8" />
+
+  <!-- Back Card (Tilted) -->
+  <rect x="110" y="105" width="280" height="175" rx="18" fill="#1e293b" stroke="#334155" stroke-width="5" transform="rotate(-7 250 192)" />
+
+  <!-- Front Card -->
+  <rect x="116" y="145" width="280" height="175" rx="18" fill="#1e293b" stroke="#3b82f6" stroke-width="6" />
+  <rect x="146" y="180" width="120" height="16" rx="8" fill="url(#accentGrad)" />
+  <rect x="146" y="212" width="215" height="12" rx="6" fill="#475569" />
+  <rect x="146" y="236" width="165" height="12" rx="6" fill="#334155" />
+
+  <!-- Spaced Repetition Circular Loop Arrow -->
+  <g transform="translate(256, 375)">
+    <path d="M -75,0 A 75,75 0 1,1 60,45" fill="none" stroke="url(#accentGrad)" stroke-width="20" stroke-linecap="round" />
+    <polygon points="65,15 88,60 38,62" fill="#60a5fa" />
+    <circle cx="0" cy="0" r="18" fill="url(#greenGrad)" />
+  </g>
+</svg>

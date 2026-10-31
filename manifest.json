@@ -2,20 +2,30 @@
   "name": "Mains Revision Engine",
   "short_name": "MainsRecall",
   "start_url": "./index.html",
+  "scope": "./",
+  "id": "./index.html",
   "display": "standalone",
   "background_color": "#0f141c",
   "theme_color": "#121820",
   "orientation": "portrait",
   "icons": [
     {
-      "src": "icon.png",
-      "sizes": "192x192",
-      "type": "image/png"
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
     },
     {
-      "src": "icon.png",
+      "src": "./icon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icon.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }
