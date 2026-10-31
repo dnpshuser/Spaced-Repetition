@@ -389,12 +389,18 @@ header .dot.unsaved {
 
 .modal-overlay {
   position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.7);
+  top: 0;
+  left: 0;
+  right: 0;
+  /* Sticks bottom sheet directly above virtual keyboard / password bar */
+  bottom: var(--keyboard-height, 0px);
+  background: rgba(0, 0, 0, 0.75);
   display: none;
   justify-content: center;
   align-items: flex-end;
   z-index: 100;
+  overflow: hidden;
+  transition: bottom 0.12s ease-out;
 }
 .modal-overlay.open { display: flex; }
 .modal {
@@ -403,17 +409,37 @@ header .dot.unsaved {
   border-radius: 16px 16px 0 0;
   width: 100%;
   max-width: 600px;
-  padding: 20px;
-  animation: slideUp 0.25s ease-out;
-  max-height: 90vh;
+  padding: 18px 20px 12px 20px;
+  animation: slideUp 0.2s ease-out;
+  /* Constrains modal within visible space above keyboard */
+  max-height: calc(var(--visual-viewport-h, 100dvh) - 16px);
+  display: flex;
+  flex-direction: column;
   overflow-y: auto;
+  box-sizing: border-box;
 }
 @keyframes slideUp {
   from { transform: translateY(100%); }
   to { transform: translateY(0); }
 }
 
-.form-group { margin-bottom: 14px; }
+.modal .actions,
+.modal > .btn-add {
+  position: sticky;
+  bottom: 0;
+  background: var(--surface);
+  padding-top: 10px;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  margin-top: auto;
+  z-index: 10;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 0 -8px 16px -4px rgba(24, 32, 44, 0.95);
+}
+
+.form-group {
+  margin-bottom: 14px;
+}
+
 .form-group label {
   display: block;
   font-size: 0.78rem;
@@ -422,6 +448,7 @@ header .dot.unsaved {
   font-weight: 700;
   letter-spacing: 0.5px;
 }
+
 .form-control {
   width: 100%;
   background: var(--bg);
@@ -429,9 +456,42 @@ header .dot.unsaved {
   color: var(--text-main);
   padding: 12px;
   border-radius: 8px;
-  font-size: 0.95rem;
+  font-size: 16px !important; /* 16px prevents mobile browser auto-zoom */
 }
-.form-control:focus { outline: none; border-color: var(--accent); }
+.form-control:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+@media (max-height: 520px) {
+  .modal {
+    padding: 12px 16px 8px 16px;
+  }
+  .modal h3 {
+    font-size: 0.95rem;
+    margin-bottom: 4px !important;
+  }
+  /* Hides long descriptions when keyboard is open so fields fit cleanly */
+  .modal p:not(#demote-topic-title) {
+    display: none;
+  }
+  .form-group {
+    margin-bottom: 8px;
+  }
+  .form-group label {
+    font-size: 0.68rem;
+    margin-bottom: 2px;
+  }
+  .form-control {
+    padding: 8px 10px;
+  }
+  .modal .actions,
+  .modal > .btn-add {
+    padding-top: 6px;
+    padding-bottom: 8px;
+    margin-top: 6px;
+  }
+}
 
 .error-banner {
   background: rgba(239, 68, 68, 0.15);

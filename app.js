@@ -2,7 +2,7 @@
 const CLOUD_SAVE_PASSWORD = 'sdrgb';
 
 // Replace with your actual deployed Google Apps Script Web App URL ending in /exec:
-const HARDCODED_CLOUD_URL = 'https://script.google.com/macros/s/AKfycbwAC7yNFvMyKSI2GDeyeQ4y4QL4HvOGYFEDIpnDcAHxeHElIX168SHVHcseEW5DCD3tgQ/exec';
+const HARDCODED_CLOUD_URL = 'https://script.google.com/macros/s/AKfycb...YOUR_DEPLOYMENT_ID.../exec';
 
 const STAGE_CONFIG = {
   1: { label: 'Day 1 Review', short: 'Day 1', class: 'badge-d1' },
@@ -12,6 +12,10 @@ const STAGE_CONFIG = {
   5: { label: 'Mastered', short: 'Mastered', class: 'badge-master' }
 };
 
+// 1-3-7-30 Interval increments:
+// Day 1 Review passed -> Day 3 (+2 days)
+// Day 3 Review passed -> Day 7 (+4 days)
+// Day 7 Review passed -> Day 30 (+23 days)
 const FORWARD_INTERVALS = {
   1: 2,
   2: 4,
@@ -33,6 +37,8 @@ let selectedDemoteStage = 1;
 let hasUnsavedCloudChanges = false;
 
 window.addEventListener('DOMContentLoaded', async () => {
+  setupVisualViewportSync();
+
   if (navigator.storage && navigator.storage.persist) {
     const isPersisted = await navigator.storage.persist();
     document.getElementById('storage-status')?.setAttribute('title', isPersisted ? 'Persistent Engine' : 'Standard Local');
@@ -41,7 +47,6 @@ window.addEventListener('DOMContentLoaded', async () => {
   loadData();
   renderAll();
 
-  // If local storage is empty, auto-pull data directly from Google Sheet on startup
   if (topics.length === 0 && HARDCODED_CLOUD_URL && HARDCODED_CLOUD_URL.includes('/exec')) {
     autoSyncFromCloud();
   }
@@ -58,6 +63,25 @@ window.addEventListener('beforeunload', (e) => {
     return '';
   }
 });
+
+
+
+// --- DYNAMIC VISUAL VIEWPORT & KEYBOARD TRACKER ---
+function setupVisualViewportSync() {
+  if (!window.visualViewport) return;
+
+  const updateViewport = () => {
+    const vv = window.visualViewport;
+    // Calculates exact height consumed by virtual keyboard + suggestion / password bars
+    const keyboardHeight = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    document.documentElement.style.setProperty('--keyboard-height', `${keyboardHeight}px`);
+    document.documentElement.style.setProperty('--visual-viewport-h', `${vv.height}px`);
+  };
+
+  window.visualViewport.addEventListener('resize', updateViewport);
+  window.visualViewport.addEventListener('scroll', updateViewport);
+  updateViewport();
+}
 
 function getTodayString() {
   const d = new Date();
@@ -87,6 +111,23 @@ function normalizePaper(paperStr) {
   return 'Other';
 }
 
+function generateNextCardId(paper) {
+  const norm = normalizePaper(paper);
+  const regex = new RegExp(`^${norm}-(\\d+)$`, 'i');
+  let highestNum = 0;
+
+  topics.forEach(t => {
+    if (!t.cardId) return;
+    const match = t.cardId.trim().match(regex);
+    if (match) {
+      const currentNum = parseInt(match[1], 10);
+      if (currentNum > highestNum) highestNum = currentNum;
+    }
+  });
+
+  return `${norm}-${String(highestNum + 1).padStart(3, '0')}`;
+}
+
 function loadData() {
   try {
     const raw = localStorage.getItem(DB_KEY);
@@ -102,13 +143,12 @@ function loadData() {
       if (!t.failCount) t.failCount = 0;
 
       if (!t.cardId) {
-        const pNorm = normalizePaper(t.paper);
-        t.cardId = `${pNorm}-${String(index + 1).padStart(3, '0')}`;
+        t.cardId = generateNextCardId(t.paper);
         hasChanges = true;
       }
 
       if (!t.nextDue && t.stage < 5) {
-        t.nextDue = today;
+        t.nextDue = addDays(today, 1);
         hasChanges = true;
       }
     });
@@ -163,7 +203,7 @@ function updateSyncStatusUI() {
   }
 }
 
-// Automatically pulls data on startup when local storage is empty
+// Auto-syncs from cloud if local storage was cleared
 async function autoSyncFromCloud() {
   const statusText = document.getElementById('sync-status-text');
   const dot = document.getElementById('sync-dot');
@@ -189,7 +229,7 @@ async function autoSyncFromCloud() {
           stage: parseInt(t.stage, 10) || 1,
           addedDate: t.addedDate || today,
           lastReviewed: t.lastReviewed || today,
-          nextDue: t.nextDue || (parseInt(t.stage, 10) === 5 ? null : today),
+          nextDue: t.nextDue || (parseInt(t.stage, 10) === 5 ? null : addDays(today, 1)),
           failCount: parseInt(t.failCount, 10) || 0
         };
       });
@@ -205,14 +245,19 @@ async function autoSyncFromCloud() {
       updateSyncStatusUI();
     }
   } catch (err) {
-    console.warn('Auto-sync failed (likely offline):', err);
+    console.warn('Auto-sync failed:', err);
     updateSyncStatusUI();
   }
 }
 
-// Manual pull trigger from tab 3
 async function pullFromCloud() {
-  const enteredPass = 'sdrgb'
+  const enteredPass = prompt('Enter password to pull from Google Sheet:', '');
+  if (enteredPass === null) return;
+  
+  if (enteredPass.trim() !== CLOUD_SAVE_PASSWORD) {
+    alert('Incorrect password. Pull aborted.');
+    return;
+  }
 
   if (!HARDCODED_CLOUD_URL || !HARDCODED_CLOUD_URL.includes('/exec')) {
     alert('Please insert a valid Google Apps Script Web App URL ending in /exec into app.js.');
@@ -259,7 +304,7 @@ async function pullFromCloud() {
         stage: parseInt(t.stage, 10) || 1,
         addedDate: t.addedDate || today,
         lastReviewed: t.lastReviewed || today,
-        nextDue: t.nextDue || (parseInt(t.stage, 10) === 5 ? null : today),
+        nextDue: t.nextDue || (parseInt(t.stage, 10) === 5 ? null : addDays(today, 1)),
         failCount: parseInt(t.failCount, 10) || 0
       };
     });
@@ -276,7 +321,7 @@ async function pullFromCloud() {
 
   } catch (err) {
     console.error('Pull failed:', err);
-    alert('Failed to connect to Google Sheet. Check internet connection and deployment settings.');
+    alert('Failed to connect to Google Sheet. Check internet connection.');
   } finally {
     btn.textContent = origText;
     btn.disabled = false;
@@ -312,12 +357,15 @@ function openPasswordModal() {
   if (errorEl) errorEl.classList.add('hidden');
   if (passInput) passInput.value = '';
 
+  document.body.style.overflow = 'hidden';
   modal.classList.add('open');
-  setTimeout(() => passInput?.focus(), 150);
+  setTimeout(() => passInput?.focus(), 100);
 }
 
 function closePasswordModal() {
+  document.activeElement?.blur();
   document.getElementById('password-modal').classList.remove('open');
+  document.body.style.overflow = '';
 }
 
 async function verifyAndSaveToCloud() {
@@ -333,7 +381,7 @@ async function verifyAndSaveToCloud() {
   }
 
   if (!HARDCODED_CLOUD_URL || !HARDCODED_CLOUD_URL.includes('/exec')) {
-    alert('Please insert a valid Google Apps Script Web App URL ending in /exec into app.js.');
+    alert('Please insert your valid Google Apps Script Web App URL ending in /exec into app.js.');
     closePasswordModal();
     return;
   }
@@ -344,7 +392,7 @@ async function verifyAndSaveToCloud() {
     return;
   }
 
-  // 1. Optimistic UI update: close modal and show background sync state immediately
+  // Optimistic UI close
   closePasswordModal();
   hasUnsavedCloudChanges = false;
   localStorage.removeItem(UNSAVED_FLAG_KEY);
@@ -361,7 +409,6 @@ async function verifyAndSaveToCloud() {
     data: topics
   };
 
-  // 2. Network call runs in background without blocking interaction
   try {
     await fetch(HARDCODED_CLOUD_URL, {
       method: 'POST',
@@ -374,7 +421,6 @@ async function verifyAndSaveToCloud() {
     if (syncText) syncText.textContent = 'Synced to Sheet';
   } catch (err) {
     console.error('Background cloud sync error:', err);
-    // Revert state if network fails
     hasUnsavedCloudChanges = true;
     localStorage.setItem(UNSAVED_FLAG_KEY, 'true');
     updateSyncStatusUI();
@@ -382,6 +428,7 @@ async function verifyAndSaveToCloud() {
   }
 }
 
+// --- LOG TOPIC (DAY 0 COMPLETE, DAY 1 DUE TOMORROW) ---
 function addNewTopic() {
   const title = document.getElementById('add-topic-title').value.trim();
   const paper = document.getElementById('add-topic-paper').value;
@@ -390,22 +437,20 @@ function addNewTopic() {
   if (!title) return;
 
   const today = getTodayString();
-  const norm = normalizePaper(paper);
 
   if (!cardId) {
-    const paperCount = topics.filter(t => normalizePaper(t.paper) === norm).length + 1;
-    cardId = `${norm}-${String(paperCount).padStart(3, '0')}`;
+    cardId = generateNextCardId(paper);
   }
 
   const newEntry = {
-    id: 'T-' + Date.now(),
+    id: (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ('T-' + Date.now()),
     cardId: cardId,
     title: title,
     paper: paper,
-    stage: 1,
-    addedDate: today,
+    stage: 1, // Ready for Day 1 revision
+    addedDate: today, // Day 0 done today
     lastReviewed: today,
-    nextDue: today,
+    nextDue: addDays(today, 1), // Day 1 revision is due TOMORROW
     failCount: 0
   };
 
@@ -417,6 +462,7 @@ function addNewTopic() {
   closeAddModal();
 }
 
+// --- ADVANCE MILESTONE ---
 function handlePass(id) {
   const topic = topics.find(t => t.id === id);
   if (!topic) return;
@@ -474,7 +520,9 @@ function openDemoteModal(id) {
 }
 
 function closeDemoteModal() {
+  document.activeElement?.blur();
   document.getElementById('demote-modal').classList.remove('open');
+  document.body.style.overflow = '';
   activeDemotingTopicId = null;
 }
 
@@ -484,7 +532,7 @@ function selectDemoteStage(stageNum) {
   document.getElementById(`bucket-btn-${stageNum}`).classList.add('active');
 
   let defaultDays = 1;
-  if (stageNum === 2) defaultDays = 4;
+  if (stageNum === 2) defaultDays = 3;
   if (stageNum === 3) defaultDays = 7;
 
   document.getElementById('demote-interval-input').value = defaultDays;
@@ -533,7 +581,7 @@ function openEditModal(id) {
     dueInput.value = '';
   } else {
     dueGroup.style.display = 'block';
-    dueInput.value = topic.nextDue || getTodayString();
+    dueInput.value = topic.nextDue || addDays(getTodayString(), 1);
   }
 
   document.getElementById('edit-modal').classList.add('open');
@@ -550,7 +598,7 @@ function onEditStageChange() {
     dueInput.value = '';
   } else {
     dueGroup.style.display = 'block';
-    if (stage === 1) dueInput.value = today;
+    if (stage === 1) dueInput.value = addDays(today, 1);
     else if (stage === 2) dueInput.value = addDays(today, 3);
     else if (stage === 3) dueInput.value = addDays(today, 7);
     else if (stage === 4) dueInput.value = addDays(today, 30);
@@ -558,7 +606,9 @@ function onEditStageChange() {
 }
 
 function closeEditModal() {
+  document.activeElement?.blur();
   document.getElementById('edit-modal').classList.remove('open');
+  document.body.style.overflow = '';
   activeEditingTopicId = null;
 }
 
@@ -583,7 +633,7 @@ function saveTopicEdits() {
   if (newStage === 5) {
     topic.nextDue = null;
   } else {
-    topic.nextDue = newDue || getTodayString();
+    topic.nextDue = newDue || addDays(getTodayString(), 1);
   }
 
   closeEditModal();
@@ -801,10 +851,24 @@ function switchTab(tab) {
   }
 }
 
-function openAddModal() { document.getElementById('add-modal').classList.add('open'); }
-function closeAddModal() { document.getElementById('add-modal').classList.remove('open'); }
-function closeModalOnBg(e, modalId) { if (e.target.id === modalId) document.getElementById(modalId).classList.remove('open'); }
+function openAddModal() {
+  document.body.style.overflow = 'hidden';
+  document.getElementById('add-modal').classList.add('open');
+}
 
+function closeAddModal() {
+  document.activeElement?.blur();
+  document.getElementById('add-modal').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function closeModalOnBg(e, modalId) {
+  if (e.target.id === modalId) {
+    document.activeElement?.blur();
+    document.getElementById(modalId).classList.remove('open');
+    document.body.style.overflow = '';
+  }
+}
 function escapeHtml(str) {
   return (str || '').replace(/[&<>'"]/g, tag => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
@@ -838,16 +902,15 @@ function importDataJSON(event) {
           const id = item.id || ('T-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5));
           if (!existingIds.has(id)) {
             const stage = item.stage !== undefined ? item.stage : 1;
-            const pNorm = normalizePaper(item.paper);
             topics.push({
               id: id,
-              cardId: item.cardId || `${pNorm}-${String(topics.length + idx + 1).padStart(3, '0')}`,
+              cardId: item.cardId || generateNextCardId(item.paper || 'GS-1'),
               title: item.title || item.topic || 'Untitled Topic',
               paper: item.paper || item.subject || 'GS-1',
               stage: stage,
               addedDate: item.addedDate || today,
               lastReviewed: item.lastReviewed || today,
-              nextDue: (stage === 1 || !item.nextDue) ? today : item.nextDue,
+              nextDue: item.nextDue || addDays(today, 1),
               failCount: item.failCount || 0
             });
             existingIds.add(id);
