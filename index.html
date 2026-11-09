@@ -6,10 +6,11 @@
   <meta name="theme-color" content="#121820" />
   <link rel="manifest" href="./manifest.json" />
   <link rel="stylesheet" href="./style.css" />
-  <title>Mains Revision Engine</title>
+  <title>Mains Recall Hub</title>
 </head>
 <body>
 
+  <!-- HEADER -->
   <header>
     <div>
       <h1>Mains Recall Hub</h1>
@@ -28,7 +29,8 @@
     </div>
   </header>
 
-  <nav class="nav-tabs">
+  <!-- NAVIGATION TABS -->
+  <nav class="nav-tabs" id="main-navigation">
     <button class="tab-btn active" onclick="switchTab('today')">Today's Queue (<span id="due-count">0</span>)</button>
     <button class="tab-btn" onclick="switchTab('pipeline')">Full Pipeline (<span id="total-count">0</span>)</button>
     <button class="tab-btn" onclick="switchTab('settings')">Offline Backups</button>
@@ -37,17 +39,39 @@
   <main class="container">
     <!-- TAB 1: TODAY'S QUEUE -->
     <section id="view-today">
-      <!-- Milestone Stages Summary -->
+      <!-- Interactive Milestone Stage Filter Cards -->
       <div class="summary-grid">
-        <div class="stat-card"><div class="count d1" id="stat-d1">0</div><div class="label">Day 1</div></div>
-        <div class="stat-card"><div class="count d3" id="stat-d3">0</div><div class="label">Day 3</div></div>
-        <div class="stat-card"><div class="count d7" id="stat-d7">0</div><div class="label">Day 7</div></div>
-        <div class="stat-card"><div class="count d30" id="stat-d30">0</div><div class="label">Day 30</div></div>
+        <div class="stat-card" id="card-stat-d1" onclick="toggleStageFilter(1)">
+          <div class="count d1" id="stat-d1">0</div>
+          <div class="label">Day 1</div>
+        </div>
+        <div class="stat-card" id="card-stat-d3" onclick="toggleStageFilter(2)">
+          <div class="count d3" id="stat-d3">0</div>
+          <div class="label">Day 3</div>
+        </div>
+        <div class="stat-card" id="card-stat-d7" onclick="toggleStageFilter(3)">
+          <div class="count d7" id="stat-d7">0</div>
+          <div class="label">Day 7</div>
+        </div>
+        <div class="stat-card" id="card-stat-d30" onclick="toggleStageFilter(4)">
+          <div class="count d30" id="stat-d30">0</div>
+          <div class="label">Day 30</div>
+        </div>
+      </div>
+
+      <!-- Quick Stage Filter Pill Strip -->
+      <div class="filter-header-label">FILTER TODAY'S QUEUE BY STAGE:</div>
+      <div class="stage-filter-bar" id="stage-filter-container">
+        <button class="filter-chip active" id="chip-stage-all" onclick="setStageFilter('ALL')">All Stages</button>
+        <button class="filter-chip" id="chip-stage-1" onclick="setStageFilter(1)">Day 1</button>
+        <button class="filter-chip" id="chip-stage-2" onclick="setStageFilter(2)">Day 3</button>
+        <button class="filter-chip" id="chip-stage-3" onclick="setStageFilter(3)">Day 7</button>
+        <button class="filter-chip" id="chip-stage-4" onclick="setStageFilter(4)">Day 30</button>
       </div>
 
       <!-- Forecast & Rest Day Utility Bar -->
       <div class="utility-bar">
-        <div class="forecast-chip clickable" onclick="openTomorrowModal()" title="Click to view tomorrow's topics">
+        <div class="forecast-chip clickable" onclick="openTomorrowModal()" title="View tomorrow's schedule">
           <span class="forecast-icon">📅</span>
           <span>Tomorrow: <strong id="stat-tomorrow" class="forecast-count">0</strong></span>
           <span class="forecast-view-hint">View ➔</span>
@@ -57,18 +81,59 @@
         </button>
       </div>
 
+      <!-- PRIMARY ACTION: ADD TOPIC (MOVED TO TOP) -->
+      <button class="btn btn-add" onclick="openAddModal()">+ Add Completed Topic (Day 0)</button>
+
       <!-- Paper Filter Bar -->
       <div class="filter-header-label">FILTER TODAY'S QUEUE BY PAPER:</div>
       <div class="paper-filter-bar" id="paper-filter-container"></div>
 
-      <div id="due-list"></div>
+      <!-- START TIMED REVISION SESSION CTA -->
+      <div class="session-launch-card">
+        <button class="btn btn-session" id="btn-start-session" onclick="startRevisionSession()">
+          ⏱️ Start Timed Revision (<span id="session-card-count">0</span> cards)
+        </button>
+        <div class="session-launch-hint">Default: 3 minutes per card • Auto-advancing review sequence</div>
+      </div>
 
-      <button class="btn btn-add" onclick="openAddModal()">+ Add Completed Topic (Day 0)</button>
+      <!-- Due Topic List -->
+      <div id="due-list"></div>
     </section>
 
-    <!-- TAB 2: FULL PIPELINE -->
+    <!-- TAB 2: FULL PIPELINE & CATEGORY SUMS -->
     <section id="view-pipeline" class="hidden">
-      <input type="text" id="search-input" class="form-control" placeholder="Search by title, paper, or Card ID..." oninput="renderPipeline()" style="margin-bottom: 14px;" />
+      <!-- Multiple Category Sums Dashboard -->
+      <div class="category-sums-panel">
+        <div class="category-panel-header">CATEGORY TOPIC TOTALS</div>
+        <div class="category-sums-grid">
+          <div class="cat-card" onclick="filterPipelineByCategory('GS123')">
+            <div class="cat-count" id="cat-sum-gs123">0</div>
+            <div class="cat-label">GS 1+2+3</div>
+          </div>
+          <div class="cat-card" onclick="filterPipelineByCategory('GS-4')">
+            <div class="cat-count" id="cat-sum-ethics">0</div>
+            <div class="cat-label">Ethics</div>
+          </div>
+          <div class="cat-card" onclick="filterPipelineByCategory('Essay')">
+            <div class="cat-count" id="cat-sum-essay">0</div>
+            <div class="cat-label">Essay</div>
+          </div>
+          <div class="cat-card" onclick="filterPipelineByCategory('Optional')">
+            <div class="cat-count" id="cat-sum-optional">0</div>
+            <div class="cat-label">Optionals</div>
+          </div>
+          <div class="cat-card" onclick="filterPipelineByCategory('Prelims')">
+            <div class="cat-count" id="cat-sum-prelims">0</div>
+            <div class="cat-label">Prelims</div>
+          </div>
+          <div class="cat-card highlight" onclick="filterPipelineByCategory('ALL')">
+            <div class="cat-count" id="cat-sum-total">0</div>
+            <div class="cat-label">Total Cards</div>
+          </div>
+        </div>
+      </div>
+
+      <input type="text" id="search-input" class="form-control" placeholder="Search by title, paper, subject, or Card ID..." oninput="renderPipeline()" style="margin-bottom: 14px;" />
       <div id="pipeline-list"></div>
     </section>
 
@@ -77,7 +142,7 @@
       <div class="topic-card">
         <h3 style="margin-bottom: 10px;">Cloud Database Sync</h3>
         <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 14px;">
-          Restore all cards from your Google Sheet into your app. This will overwrite local browser storage with the data currently present in your Sheet.
+          Restore all cards from your 7 Google Sheet categories. Local changes will be replaced with the Sheet database.
         </p>
         <button class="btn btn-pass" id="btn-pull-cloud" style="width:100%;" onclick="pullFromCloud()">
           📥 Pull / Restore from Google Sheet
@@ -98,6 +163,67 @@
         </div>
       </div>
     </section>
+
+    <!-- TAB 4: ACTIVE REVISION SESSION VIEW (TIMED RECALL) -->
+    <section id="view-revision-session" class="hidden">
+      <div class="session-top-bar">
+        <button class="btn-text-close" onclick="abortRevisionSession()">✕ Exit</button>
+        <div class="session-progress-text">Card <span id="session-current-idx">1</span> of <span id="session-total-idx">5</span></div>
+        <div class="session-elapsed-text">⏱️ <span id="session-elapsed-timer">00:00</span></div>
+      </div>
+
+      <div class="session-progress-track">
+        <div class="session-progress-fill" id="session-progress-fill" style="width: 20%;"></div>
+      </div>
+
+      <div class="session-card-focus">
+        <div class="session-card-meta">
+          <span class="card-id-tag" id="session-card-id">GS-1-001</span>
+          <span class="badge" id="session-paper-badge">GS-1</span>
+          <span class="badge badge-subject" id="session-subject-badge">Geography</span>
+          <span class="badge" id="session-stage-badge">Day 3 Review</span>
+        </div>
+        <h2 class="session-card-title" id="session-card-title">Cyclone Formation & Structure</h2>
+      </div>
+
+      <!-- Large Circular / Monospace Timer Display -->
+      <div class="timer-display-box">
+        <div class="timer-digits" id="timer-digits">03:00</div>
+        <div class="timer-subtext" id="timer-state-label">REVISION DRILL ACTIVE</div>
+      </div>
+
+      <!-- Controls -->
+      <div class="timer-controls-grid">
+        <button class="btn btn-timer-adjust" onclick="adjustSessionTime(-30)">-30s</button>
+        <button class="btn btn-timer-play" id="btn-timer-pause" onclick="togglePauseSession()">⏸ Pause</button>
+        <button class="btn btn-timer-adjust" onclick="adjustSessionTime(+30)">+30s</button>
+      </div>
+
+      <div class="session-nav-row">
+        <button class="btn btn-secondary" id="btn-session-prev" onclick="goToPrevSessionCard()">⏮ Prev Card</button>
+        <button class="btn btn-pass" id="btn-session-next" onclick="goToNextSessionCard()">Next Card ⏭</button>
+      </div>
+    </section>
+
+    <!-- TAB 5: REVISION SESSION ANALYSIS & GRADING VIEW -->
+    <section id="view-revision-analysis" class="hidden">
+      <div class="analysis-header-card">
+        <h2>Session Complete! 🎉</h2>
+        <p id="analysis-summary-subtitle">5 Topics Reviewed in 15m 00s</p>
+        <button class="btn btn-secondary btn-sm" onclick="markAllSessionGrading('pass')" style="margin-top: 8px;">
+          ✓ Mark All as Passed
+        </button>
+      </div>
+
+      <div class="filter-header-label">REVIEW & GRADE REVISION PERFORMANCE:</div>
+      <div id="analysis-cards-list"></div>
+
+      <div class="analysis-commit-bar">
+        <button class="btn btn-pass btn-lg" onclick="commitSessionGrading()">
+          ✓ Commit Grades & Return to Queue
+        </button>
+      </div>
+    </section>
   </main>
 
   <!-- PASSWORD VERIFICATION MODAL -->
@@ -108,7 +234,7 @@
         <button class="btn-text-close" onclick="closePasswordModal()">✕</button>
       </div>
       <p style="font-size: 0.84rem; color: var(--text-muted); margin-bottom: 16px; line-height: 1.4;">
-        Enter your authorization password to push pending local changes to your Google Sheet in the background.
+        Enter your authorization password to save all topics to their respective sheets in the background.
       </p>
 
       <div class="form-group">
@@ -156,14 +282,21 @@
         <input type="text" id="add-topic-title" class="form-control" placeholder="e.g. CRZ Notification 2019" />
       </div>
       <div class="form-group">
-        <label>PAPER / SUBJECT</label>
-        <select id="add-topic-paper" class="form-control">
+        <label>PAPER / CATEGORY</label>
+        <select id="add-topic-paper" class="form-control" onchange="onPaperChange('add')">
           <option value="GS-1">GS-1 (History / Geo / Society)</option>
           <option value="GS-2">GS-2 (Polity / Gov / IR)</option>
           <option value="GS-3">GS-3 (Economy / Env / Security)</option>
           <option value="GS-4">GS-4 (Ethics)</option>
-          <option value="Optional">Optional Subject</option>
-          <option value="Essay">Essay / Other</option>
+          <option value="Essay">Essay</option>
+          <option value="Optional">Optional (Language / Lit)</option>
+          <option value="Prelims">Prelims Specific</option>
+        </select>
+      </div>
+      <div class="form-group" id="add-subject-group">
+        <label>SUBJECT</label>
+        <select id="add-topic-subject" class="form-control">
+          <!-- Dynamically populated -->
         </select>
       </div>
       <button class="btn btn-add" onclick="addNewTopic()">Commit to Pipeline</button>
@@ -186,16 +319,20 @@
         <input type="text" id="edit-topic-title" class="form-control" />
       </div>
       <div class="form-group">
-        <label>PAPER / SUBJECT</label>
-        <select id="edit-topic-paper" class="form-control">
+        <label>PAPER / CATEGORY</label>
+        <select id="edit-topic-paper" class="form-control" onchange="onPaperChange('edit')">
           <option value="GS-1">GS-1</option>
           <option value="GS-2">GS-2</option>
           <option value="GS-3">GS-3</option>
           <option value="GS-4">GS-4</option>
-          <option value="Optional">Optional</option>
           <option value="Essay">Essay</option>
-          <option value="Other">Other</option>
+          <option value="Optional">Optional</option>
+          <option value="Prelims">Prelims</option>
         </select>
+      </div>
+      <div class="form-group" id="edit-subject-group">
+        <label>SUBJECT</label>
+        <select id="edit-topic-subject" class="form-control"></select>
       </div>
 
       <div class="form-group">
@@ -255,7 +392,7 @@
     </div>
   </div>
 
-  <!-- NON-BLOCKING FLOATING TOAST BANNER -->
+  <!-- NON-BLOCKING FLOATING TOAST -->
   <div id="toast-container" class="toast-container hidden">
     <div class="toast-content">
       <span id="toast-message"></span>

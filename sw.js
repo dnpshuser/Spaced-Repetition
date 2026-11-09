@@ -1,22 +1,20 @@
-const CACHE_NAME = 'mains-cache-v12';
+const CACHE_NAME = 'mains-cache-v14';
 const ASSETS = [
   './',
   './index.html',
   './style.css',
   './app.js',
-  './manifest.json',
-  './icon.svg'
+  './manifest.json'
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(async (cache) => {
-      // Non-blocking asset addition prevents a single 404 from failing installation
       for (const asset of ASSETS) {
         try {
           await cache.add(asset);
         } catch (err) {
-          console.warn('Cache bypass on asset:', asset);
+          console.warn('Failed to cache asset:', asset, err);
         }
       }
     })
