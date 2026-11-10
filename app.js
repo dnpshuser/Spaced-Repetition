@@ -2,7 +2,7 @@
 const CLOUD_SAVE_PASSWORD = 'sdrgb';
 
 // Replace with your actual deployed Google Apps Script Web App URL ending in /exec:
-const HARDCODED_CLOUD_URL = 'https://script.google.com/macros/s/AKfycbzrb2YMw8Ko8EYpsPEnJdXmWZQr_krUyHzUvCksZDz69zJF2lniV-lxoRoGrq5VutRB7g/exec';
+const HARDCODED_CLOUD_URL = 'https://script.google.com/macros/s/AKfycbyQjrJf_xVpGGM_UMqOyq4Gc-SpHZp4cV1jCndlylBv1dSGr-R2KLY-iiCkXgJRIeYkNw/exec';
 
 const STAGE_CONFIG = {
   1: { label: 'Day 1 Review', short: 'Day 1', class: 'badge-d1' },
